@@ -18,7 +18,7 @@ def getJsonAsArray(path):
 
 samples = getJsonAsArray("../../data/ganzer_text/dataset.jsonl")
 
-train_data, temp_data = train_test_split(samples, train_size=45000, random_state=42)
+train_data, temp_data = train_test_split(samples, train_size=10000, random_state=42)
 
 val_data, test_data = train_test_split(temp_data, test_size=5000, random_state=42)
 
@@ -56,7 +56,7 @@ training_args = TrainingArguments(
     logging_dir="./logs",
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
-    num_train_epochs=3,
+    num_train_epochs=2,                # war 3
     weight_decay=0.01,
     learning_rate=2e-5,
     warmup_steps=500,
