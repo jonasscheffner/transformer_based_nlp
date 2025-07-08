@@ -16,6 +16,7 @@ import nltk
 # 1. Setup
 print("CUDA available:", torch.cuda.is_available())
 nltk.download("punkt")
+nltk.download("punkt_tab")
 
 from nltk.tokenize import sent_tokenize
 
