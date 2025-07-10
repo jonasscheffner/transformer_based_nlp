@@ -84,7 +84,7 @@ val_tokenized = dataset["validation"].map(preprocess)
 # 7. Trainingsargumente
 training_args = TrainingArguments(
     output_dir="./paragraph_model_output",
-    evaluation_strategy="steps",
+    eval_strategy="steps",
     eval_steps=500,
     logging_dir="./logs",
     logging_steps=20,

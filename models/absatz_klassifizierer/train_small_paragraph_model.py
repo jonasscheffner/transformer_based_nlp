@@ -45,7 +45,7 @@ def load_paragraph_data(path):
 
 # 2. Daten laden und reduzieren
 samples = load_paragraph_data("../../data/dataset.jsonl")
-samples = samples[:10000]  # Gesamt nur 10.000
+samples = samples[:50000]
 
 # 3. Split
 train_data, temp_data = train_test_split(samples, train_size=7000, random_state=42)
@@ -84,7 +84,7 @@ val_tokenized = dataset["validation"].map(preprocess)
 # 6. Trainingsargumente
 training_args = TrainingArguments(
     output_dir="./paragraph_model_output",
-    evaluation_strategy="steps",
+    eval_strategy="steps",
     eval_steps=500,
     save_strategy="steps",  # 👈 HIER geändert!
     save_steps=1000,
