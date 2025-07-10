@@ -83,18 +83,19 @@ val_tokenized = dataset["validation"].map(preprocess)
 
 # 6. Trainingsargumente
 training_args = TrainingArguments(
-    output_dir="./small_model_output",
+    output_dir="./paragraph_model_output",
     evaluation_strategy="steps",
-    eval_steps=2000,  # seltener evaluieren
+    eval_steps=500,
+    save_strategy="steps",  # 👈 HIER geändert!
+    save_steps=1000,
     logging_dir="./logs",
-    logging_steps=100,
-    save_strategy="epoch",
+    logging_steps=20,
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
     num_train_epochs=2,
     weight_decay=0.01,
     learning_rate=2e-5,
-    save_total_limit=1,
+    save_total_limit=2,
     load_best_model_at_end=True,
     metric_for_best_model="accuracy",
     report_to="none",
