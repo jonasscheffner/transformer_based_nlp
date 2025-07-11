@@ -31,7 +31,7 @@ def split_into_paragraphs(text, max_sentences=4):
     return paragraphs
 
 
-# 3. Lese und verwandle JSONL-Datei in Absatz-Datensatz
+# 3. Lese JSONL-Datei in Absatz-Datensatz
 def load_paragraph_data(path):
     paragraph_samples = []
     with open(path, "r", encoding="utf-8") as f:

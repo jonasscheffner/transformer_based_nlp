@@ -48,8 +48,8 @@ samples = load_paragraph_data("../../data/dataset.jsonl")
 samples = samples[:50000]
 
 # 3. Split
-train_data, temp_data = train_test_split(samples, train_size=7000, random_state=42)
-val_data, test_data = train_test_split(temp_data, test_size=1500, random_state=42)
+train_data, temp_data = train_test_split(samples, train_size=40000, random_state=42)
+val_data, test_data = train_test_split(temp_data, test_size=5000, random_state=42)
 
 dataset = DatasetDict(
     {
@@ -86,7 +86,7 @@ training_args = TrainingArguments(
     output_dir="./paragraph_model_output",
     eval_strategy="steps",
     eval_steps=500,
-    save_strategy="steps",  # 👈 HIER geändert!
+    save_strategy="steps",
     save_steps=1000,
     logging_dir="./logs",
     logging_steps=20,
