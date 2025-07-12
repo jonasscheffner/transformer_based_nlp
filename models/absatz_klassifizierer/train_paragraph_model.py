@@ -72,7 +72,7 @@ model = AutoModelForSequenceClassification.from_pretrained(model_name, num_label
 # 6. Tokenisierung
 def preprocess(example):
     tokens = tokenizer(
-        example["text"], truncation=True, padding="max_length", max_length=256
+        example["text"], truncation=True, padding="max_length", max_length=512
     )
     tokens["label"] = example["label"]
     return tokens
