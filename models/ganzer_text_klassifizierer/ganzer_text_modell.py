@@ -18,7 +18,7 @@ def getJsonAsArray(path):
 
 samples = getJsonAsArray("../../data/ganzer_text/dataset.jsonl")
 
-train_data, temp_data = train_test_split(samples, train_size=10000, random_state=42)
+train_data, temp_data = train_test_split(samples, train_size=50000, random_state=42)
 
 val_data, test_data = train_test_split(temp_data, test_size=5000, random_state=42)
 
@@ -39,7 +39,7 @@ tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
 
 def preprocess(example):
-    tokenized = tokenizer(example["text"], truncation=True, padding="max_length", max_length=256)
+    tokenized = tokenizer(example["text"], truncation=True)
     tokenized["label"] = example["label"]
     return tokenized
 
@@ -56,7 +56,7 @@ training_args = TrainingArguments(
     logging_dir="./logs",
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
-    num_train_epochs=2,                # war 3
+    num_train_epochs=2,               
     weight_decay=0.01,
     learning_rate=2e-5,
     warmup_steps=500,
@@ -64,7 +64,7 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="accuracy",
     greater_is_better=True,
-    fp16=True,                              # falls GPU benutzt wird am besten anmachen
+    fp16=True,                         # falls GPU benutzt wird am besten anmachen
     report_to="none"   
 )
 
@@ -158,42 +158,3 @@ print(f"Total accuracy on test data: {correct/len(dataset['test'])}")
 
 correctly_classified_file.close()
 incorrectly_classified_file.close()
-
-
-
-
-
-
-
-
-
-
-
-
-#from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
-#import numpy as np
-#import evaluate
-#import torch
-#
-#tokenizer = AutoTokenizer.from_pretrained("./ai_human_classifier_gpt2_absatz_tokenizer")
-#model = AutoModelForSequenceClassification.from_pretrained("./ai_human_classifier_gpt2_absatz_model", num_labels=2)
-#
-#import torch
-#
-#while True:
-#    user_input = input("Gib einen Text ein (oder 'exit' zum Beenden): ")
-#    if user_input.lower() in ["exit", "quit", "q"]:
-#        print("Beendet.")
-#        break
-#
-#    # Tokenisierung
-#    inputs = tokenizer(user_input, return_tensors="pt", truncation=True, padding=True)
-#
-#    # Vorhersage
-#    with torch.no_grad():
-#        outputs = model(**inputs)
-#        prediction = torch.argmax(outputs.logits, dim=1).item()
-#
-#    # Ausgabe
-#    label = "AI" if prediction == 1 else "Mensch"
-#    print("Label:", label)
