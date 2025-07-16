@@ -13,14 +13,15 @@ def getJsonAsArray(path):
     samples = []
     for line in open(path):
         sample = json.loads(line)
-        samples.append({"text": sample["text"], "label": sample["label"]})
+        samples.append(sample)
     return samples
 
-samples = getJsonAsArray("../../data/ganzer_text/dataset.jsonl")
+samples = getJsonAsArray("../../data/ganzer_text/dataset_no_dupes.jsonl")
 
-train_data, temp_data = train_test_split(samples, train_size=50000, random_state=42)
+train_data, temp_data = train_test_split(samples, train_size=20000, random_state=42)
 
-val_data, test_data = train_test_split(temp_data, test_size=5000, random_state=42)
+test_data, val_data = train_test_split(temp_data, test_size=5000, random_state=42)
+
 
 train_dataset = Dataset.from_list(train_data)
 val_dataset = Dataset.from_list(val_data)
@@ -46,17 +47,21 @@ def preprocess(example):
 train_tokenized = dataset["train"].map(preprocess, batched=False)
 validation_tokenized = dataset["validation"].map(preprocess, batched=False)
 
+from transformers import DataCollatorWithPadding
+
+data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+
 training_args = TrainingArguments(
     output_dir="./results",
     eval_strategy="steps",
     eval_steps=500,
     save_strategy="steps",
     save_steps=5000,
-    logging_steps=20,
+    logging_steps=50,
     logging_dir="./logs",
     per_device_train_batch_size=8,
     per_device_eval_batch_size=8,
-    num_train_epochs=2,               
+    num_train_epochs=2,
     weight_decay=0.01,
     learning_rate=2e-5,
     warmup_steps=500,
@@ -64,7 +69,7 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="accuracy",
     greater_is_better=True,
-    fp16=True,                         # falls GPU benutzt wird am besten anmachen
+    fp16=True,                              # falls GPU benutzt wird am besten anmachen
     report_to="none"   
 )
 
@@ -96,6 +101,7 @@ trainer = Trainer(
     eval_dataset=validation_tokenized,
     tokenizer=tokenizer,
     compute_metrics=compute_metrics,
+    data_collator=data_collator
 )
 
 
@@ -109,52 +115,83 @@ results = trainer.evaluate()
 print("results:")
 print(results)
 
-import json
-
-results = trainer.evaluate()
-
-with open("metrics_results2.json", "w") as f:
-    json.dump(results, f, indent=4)
+with open("metrics_train.json", "w") as f:
+    json.dump(results, f, indent=2)
 
 
+test_tokenized = Dataset.from_list(test_data).map(preprocess)
+results = trainer.evaluate(test_tokenized)
 
-tokenizerSaved = AutoTokenizer.from_pretrained("./whole_text_classification_tokenizer")
-modelSaved = AutoModelForSequenceClassification.from_pretrained("./whole_text_classification_model", num_labels=2)
+print("Test-Ergebnisse für den gesamten Testdatensatz:")
+print(results)
 
-correct = 0
+with open("metrics_whole_test_dataset.json", "w") as f:
+    json.dump(results, f, indent=2)
 
-correctly_classified_file = open("correctly_classified.txt", "w", encoding="utf-8")
-incorrectly_classified_file = open("incorrectly_classified.txt", "w", encoding="utf-8")
 
-for i, sample in enumerate(dataset["test"]):
-    text = sample["text"]
-    label = sample["label"]
+from collections import defaultdict
 
-    if (i+1)%500 == 0:
-        print(f"Correct at {i} samples: {correct} accuracy: {correct/i}")
+sources_dict = defaultdict(list)
+for sample in dataset["test"]:
+    sources_dict[sample["category"]].append(sample)
 
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
 
-    with torch.no_grad():
-        if torch.cuda.is_available():
-            inputs = {k: v.to('cuda') for k, v in inputs.items()}
-            model.to('cuda')
+for category in sources_dict.keys():
+    test_data_category = sources_dict[category]
+    tokenized = Dataset.from_list(test_data_category).map(preprocess)
+    results = trainer.evaluate(tokenized)
 
-        outputs = model(**inputs)
-        prediction = torch.argmax(outputs.logits, dim=1).item()
+    print(f"Test Results for {category}:")
+    print(results)
 
-        if prediction == label:
-            correct = correct + 1
-            correctly_classified_file.write(f"Actual Label: {label}, Predicted Label: {prediction}\n")
-            correctly_classified_file.write(f"Text: {text}\n")
-            correctly_classified_file.write("-" * 50 + "\n")
-        else:
-            incorrectly_classified_file.write(f"Actual Label: {label}, Predicted Label: {prediction}\n")
-            incorrectly_classified_file.write(f"Text: {text}\n")
-            incorrectly_classified_file.write("-" * 50 + "\n")
+    filename = f"{category}_metrics.jsonl"
+    with open(filename, "w") as f:
+        json.dump(results, f, indent=2)
 
-print(f"Correct predicted:{correct}")
-print(f"Total accuracy on test data: {correct/len(dataset['test'])}")
 
-correctly_classified_file.close()
-incorrectly_classified_file.close()
+#import json
+#
+#results = trainer.evaluate()
+#
+#with open("metrics_results2.json", "w") as f:
+#    json.dump(results, f, indent=4)
+#
+#
+#
+#test_tokenized = dataset["test"].map(preprocess, batched=False)
+#predictions = trainer.predict(test_tokenized)
+#
+#predicted_labels = np.argmax(predictions.predictions, axis=1)
+#true_labels = predictions.label_ids
+#
+#correct = 0
+#total_wrong = 0
+#
+#correctly_classified_file = open("correctly_classified.txt", "w", encoding="utf-8")
+#incorrectly_classified_file = open("incorrectly_classified.txt", "w", encoding="utf-8")
+#
+#for i, (pred, true) in enumerate(zip(predicted_labels, true_labels)):
+#
+#    if (i+1)%500 == 0:
+#        print(f"Correct at {i} samples: {correct} accuracy: {correct/i}")
+#
+#    text = dataset["test"][i]["text"]
+#    if pred == true:
+#        correct += 1
+#        correctly_classified_file.write(f"Actual Label: {true}, Predicted Label: {pred}\n")
+#        correctly_classified_file.write(f"Text: {text}\n")
+#        correctly_classified_file.write("-" * 50 + "\n")
+#    else:
+#        total_wrong += 1
+#        incorrectly_classified_file.write(f"Actual Label: {true}, Predicted Label: {pred}\n")
+#        incorrectly_classified_file.write(f"Text: {text}\n")
+#        incorrectly_classified_file.write("-" * 50 + "\n")
+#
+#incorrectly_classified_file.write(f"Total wrong: {total_wrong} from total samples: {len(dataset['test'])}\n")
+#incorrectly_classified_file.write(f"Accuracy correct: {correct / len(dataset['test'])}\n")
+#
+#print(f"Correct predicted:{correct}")
+#print(f"Total accuracy on test data: {correct/len(dataset['test'])}")
+#
+#correctly_classified_file.close()
+#incorrectly_classified_file.close()
