@@ -51,10 +51,10 @@ def load_paragraph_data(path):
 
 
 samples = load_paragraph_data("../../data/dataset_no_dupes.jsonl")
-samples = samples[:50000]
+samples = samples[:30000]
 
-train_data, temp_data = train_test_split(samples, train_size=40000, random_state=42)
-val_data, test_data = train_test_split(temp_data, test_size=5000, random_state=42)
+train_data, temp_data = train_test_split(samples, train_size=24000, random_state=42)
+val_data, test_data = train_test_split(temp_data, test_size=3000, random_state=42)
 
 dataset = DatasetDict(
     {
