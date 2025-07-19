@@ -3,10 +3,12 @@ from transformers import (
     AutoModelForSequenceClassification,
     Trainer,
     TrainingArguments,
+    DataCollatorWithPadding,
 )
 from datasets import Dataset, DatasetDict
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+from collections import defaultdict
 import numpy as np
 import evaluate
 import json
@@ -14,12 +16,13 @@ import torch
 import nltk
 from nltk.tokenize import sent_tokenize
 
-# 1. Setup
+# Setup
 print("CUDA available:", torch.cuda.is_available())
 nltk.download("punkt")
 nltk.download("punkt_tab")
 
 
+# Absatzbildung
 def split_into_paragraphs(text, max_sentences=7):
     sentences = sent_tokenize(text)
     paragraphs = []
@@ -30,6 +33,7 @@ def split_into_paragraphs(text, max_sentences=7):
     return paragraphs
 
 
+# Datensatz laden
 def load_paragraph_data(path):
     paragraph_samples = []
     with open(path, "r", encoding="utf-8") as f:
@@ -37,19 +41,20 @@ def load_paragraph_data(path):
             sample = json.loads(line)
             text = sample["text"]
             label = sample["label"]
+            category = sample.get("category", "unknown")
             paragraphs = split_into_paragraphs(text)
             for paragraph in paragraphs:
-                paragraph_samples.append({"text": paragraph, "label": label})
+                paragraph_samples.append(
+                    {"text": paragraph, "label": label, "category": category}
+                )
     return paragraph_samples
 
 
-# 2. Daten laden und begrenzen
-samples = load_paragraph_data("../../data/dataset.jsonl")
-samples = samples[:50000]
+samples = load_paragraph_data("../../data/dataset_no_dupes.jsonl")
+samples = samples[:30000]
 
-# 3. Split
-train_data, temp_data = train_test_split(samples, train_size=40000, random_state=42)
-val_data, test_data = train_test_split(temp_data, test_size=5000, random_state=42)
+train_data, temp_data = train_test_split(samples, train_size=24000, random_state=42)
+val_data, test_data = train_test_split(temp_data, test_size=3000, random_state=42)
 
 dataset = DatasetDict(
     {
@@ -63,13 +68,13 @@ print("Train size:", len(dataset["train"]))
 print("Validation size:", len(dataset["validation"]))
 print("Test size:", len(dataset["test"]))
 
-# 4. Modell & Tokenizer
+# Modell und Tokenizer
 model_name = "Hello-SimpleAI/chatgpt-detector-roberta"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
 
 
-# 5. Preprocessing
+# Preprocessing
 def preprocess(example):
     tokens = tokenizer(
         example["text"],
@@ -78,13 +83,15 @@ def preprocess(example):
         max_length=512,
     )
     tokens["label"] = example["label"]
+    tokens["category"] = example.get("category", "unknown")
     return tokens
 
 
 train_tokenized = dataset["train"].map(preprocess)
 val_tokenized = dataset["validation"].map(preprocess)
+data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-# 6. Trainingsargumente
+# Trainingsargumente
 training_args = TrainingArguments(
     output_dir="./paragraph_model_7sent_output",
     eval_strategy="steps",
@@ -106,7 +113,7 @@ training_args = TrainingArguments(
 )
 
 
-# 7. Metriken
+# Metriken
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=1)
@@ -126,7 +133,7 @@ def compute_metrics(eval_pred):
     }
 
 
-# 8. Trainer
+# Trainer
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -134,21 +141,39 @@ trainer = Trainer(
     eval_dataset=val_tokenized,
     tokenizer=tokenizer,
     compute_metrics=compute_metrics,
+    data_collator=data_collator,
 )
 
-# 9. Training starten
+# Training starten
 trainer.train()
 
-# 10. Speichern
+# Modell speichern
 model.save_pretrained("./paragraph_model_7sent")
 tokenizer.save_pretrained("./paragraph_tokenizer_7sent")
 
-# 11. Testauswertung
+# Test-Evaluation
 test_tokenized = dataset["test"].map(preprocess)
 results = trainer.evaluate(test_tokenized)
 
-print("Test results:")
+print("Test-Ergebnisse (gesamt):")
 print(results)
 
 with open("metrics_7sent.json", "w") as f:
     json.dump(results, f, indent=2)
+
+# Evaluation pro Kategorie
+sources_dict = defaultdict(list)
+for sample in dataset["test"]:
+    sources_dict[sample["category"]].append(sample)
+
+for category in sources_dict.keys():
+    test_data_category = sources_dict[category]
+    tokenized = Dataset.from_list(test_data_category).map(preprocess)
+    results = trainer.evaluate(tokenized)
+
+    print(f"Test-Ergebnisse für Kategorie '{category}':")
+    print(results)
+
+    filename = f"{category}_metrics_7sent.json"
+    with open(filename, "w") as f:
+        json.dump(results, f, indent=2)
