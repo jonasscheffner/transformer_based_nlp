@@ -8,9 +8,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import nltk
 from nltk.tokenize import sent_tokenize
+import os
 
-nltk.download("punkt")
-
+nltk.download("punkt_tab")
 print("Cuda available:", torch.cuda.is_available())
 
 def load_sentence_context_data(path, context_size=2):
@@ -28,12 +28,12 @@ def load_sentence_context_data(path, context_size=2):
     return samples
 
 print("Loading samples")
-samples = load_sentence_context_data("../../data/dataset.jsonl", context_size=2)
+samples = load_sentence_context_data("../../data/ganzer_text/dataset_no_dupes.jsonl", context_size=2)
 
-train_data, temp_data = train_test_split(samples, train_size=5000, random_state=42)
-test_data, val_data = train_test_split(temp_data, test_size=1000, random_state=42)
+train_data, temp_data = train_test_split(samples, train_size=40000, random_state=42)
+test_data, val_data = train_test_split(temp_data, test_size=6000, random_state=42)
 
-test_data = test_data[:2000]
+test_data = test_data[:100000]
 
 dataset = DatasetDict({
     "train": Dataset.from_list(train_data),
@@ -50,9 +50,6 @@ model = AutoModelForSequenceClassification.from_pretrained(model_name, num_label
 special_tokens_dict = {"additional_special_tokens": ["[TARGET]", "[/TARGET]"]}
 tokenizer.add_special_tokens(special_tokens_dict)
 model.resize_token_embeddings(len(tokenizer))
-
-print(tokenizer.convert_tokens_to_ids("[TARGET]"))
-print(tokenizer.tokenize("[TARGET] This is a test. [/TARGET]"))
 
 def preprocess(example):
     tokenized = tokenizer(example["text"], truncation=True, padding="max_length", max_length=512)
@@ -107,7 +104,7 @@ trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=train_tokenized,
-    eval_dataset=val_tokenized,
+    eval_dataset=validation_tokenized,
     tokenizer=tokenizer,
     compute_metrics=compute_metrics
 )
