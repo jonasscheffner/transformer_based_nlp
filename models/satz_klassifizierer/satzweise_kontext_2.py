@@ -115,7 +115,13 @@ model.save_pretrained("./sentence_classification_model")
 tokenizer.save_pretrained("./sentence_classification_tokenizer")
 
 
-results = trainer.evaluate(test_tokenized)
+results = trainer.evaluate()
+print("results:")
+print(results)
+
+with open("metrics_train.json", "w") as f:
+    json.dump(results, f, indent=2)
+
 print("Test-Ergebnisse:")
 print(results)
 
