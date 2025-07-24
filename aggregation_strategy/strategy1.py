@@ -11,6 +11,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 import json
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
+
 def split_into_paragraphs(text, max_sentences=7):
     sentences = sent_tokenize(text)
     paragraphs = []
@@ -30,6 +33,7 @@ def predict_whole_text(text, tokenizer, model):
         dict: prediction and probabilities
     """
     inputs = tokenizer(text, return_tensors="pt", truncation=True)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
 
     model.eval()
 
@@ -64,6 +68,7 @@ def predict_paragraph(text, tokenizer, model, max_sentences=7):
     predictions = []
     for paragraph in paragraphs:
         inputs = tokenizer(paragraph, return_tensors="pt", truncation=True, padding=True, max_length=512)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = model(**inputs)
             probs = F.softmax(outputs.logits, dim=-1)
@@ -91,6 +96,7 @@ def predict_sentence(text, tokenizer, model, context_size=2):
         input_text = " ".join(context)
 
         inputs = tokenizer(input_text, return_tensors="pt", truncation=True, padding=True, max_length=512)
+        inputs = {k: v.to(device) for k, v in inputs.items()}
         with torch.no_grad():
             outputs = model(**inputs)
             probs = F.softmax(outputs.logits, dim=-1)
@@ -145,13 +151,13 @@ def compute_metrics(true, pred):
 
 
 whole_text_tokenizer = AutoTokenizer.from_pretrained("../ganzer_text_modell_no_dupes_all_categories/whole_text_classification_tokenizer")
-whole_text_model = AutoModelForSequenceClassification.from_pretrained("../ganzer_text_modell_no_dupes_all_categories/whole_text_classification_model", num_labels=2)
+whole_text_model = AutoModelForSequenceClassification.from_pretrained("../ganzer_text_modell_no_dupes_all_categories/whole_text_classification_model", num_labels=2).to(device)
 
 paragraph_tokenizer = AutoTokenizer.from_pretrained("../absatzweise/paragraph_tokenizer_7sent")
-paragraph_model = AutoModelForSequenceClassification.from_pretrained("../absatzweise/paragraph_model_7sent", num_labels=2)
+paragraph_model = AutoModelForSequenceClassification.from_pretrained("../absatzweise/paragraph_model_7sent", num_labels=2).to(device)
 
 sentence_tokenizer = AutoTokenizer.from_pretrained("../satzweise_modell_no_dupes_all_categories/sentence_classification_tokenizer")
-sentence_model = AutoModelForSequenceClassification.from_pretrained("../satzweise_modell_no_dupes_all_categories/sentence_classification_model", num_labels=2)
+sentence_model = AutoModelForSequenceClassification.from_pretrained("../satzweise_modell_no_dupes_all_categories/sentence_classification_model", num_labels=2).to(device)
 
 
 
@@ -161,7 +167,6 @@ with open("../../data/test_dataset_no_dupes_for_aggregationstrategy.jsonl", 'r',
         samples.append(json.loads(line))
 
 print(len(samples))
-
 
 true_labels = []
 
@@ -190,7 +195,7 @@ for i, sample in enumerate(samples):
     sen_preds.append(sen_pred["prediction"])
     agg_preds.append(agg_pred)
 
-    if agg_pred == sample["label"] and (whole_pred["prediction"] != sample["label"] or par_pred["prediction"] != true_label or sen_pred["prediction"] != true_label):
+    if agg_pred == sample["label"] and (whole_pred["prediction"] != sample["label"] or par_pred["prediction"] != sample["label"] or sen_pred["prediction"] != sample["label"]):
         aggregation_correct_and_others_not.append({
             "text": sample["text"],
             "label": sample["label"],
