@@ -4,7 +4,7 @@ import torch
 
 
 def test_model(model_path, tokenizer_path, model_name):
-    print(f"\n🧪 Teste Modell '{model_name}' ...")
+    print(f"\n[TEST] Teste Modell '{model_name}' ...")
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
@@ -13,9 +13,9 @@ def test_model(model_path, tokenizer_path, model_name):
         inputs = tokenizer("Dies ist ein Test.", return_tensors="pt", truncation=True)
         with torch.no_grad():
             outputs = model(**inputs)
-        print(f"✅ Erfolg: {model_name} erfolgreich geladen und getestet.")
+        print(f"[OK] {model_name} erfolgreich geladen und getestet.")
     except Exception as e:
-        print(f"❌ Fehler beim Laden von {model_name}:\n{e}")
+        print(f"[FEHLER] Fehler beim Laden von {model_name}:\n{e}")
 
 
 MODELS = [
