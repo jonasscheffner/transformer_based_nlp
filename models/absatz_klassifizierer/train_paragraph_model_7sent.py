@@ -50,9 +50,11 @@ def load_paragraph_data(path):
     return paragraph_samples
 
 
+# Daten einlesen
 samples = load_paragraph_data("../../data/dataset_no_dupes.jsonl")
 samples = samples[:30000]
 
+# Split
 train_data, temp_data = train_test_split(samples, train_size=24000, random_state=42)
 val_data, test_data = train_test_split(temp_data, test_size=3000, random_state=42)
 
@@ -155,7 +157,7 @@ tokenizer.save_pretrained("./paragraph_tokenizer_7sent")
 test_tokenized = dataset["test"].map(preprocess)
 results = trainer.evaluate(test_tokenized)
 
-print("Test-Ergebnisse (gesamt):")
+print("Test Results for entire test set:")
 print(results)
 
 with open("metrics_7sent.json", "w") as f:
@@ -171,7 +173,7 @@ for category in sources_dict.keys():
     tokenized = Dataset.from_list(test_data_category).map(preprocess)
     results = trainer.evaluate(tokenized)
 
-    print(f"Test-Ergebnisse für Kategorie '{category}':")
+    print(f"Test Results for {category}:")
     print(results)
 
     filename = f"{category}_metrics_7sent.json"
