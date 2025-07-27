@@ -18,9 +18,9 @@ def getJsonAsArray(path):
 
 samples = getJsonAsArray("../../data/ganzer_text/dataset_no_dupes.jsonl")
 
-train_data, temp_data = train_test_split(samples, train_size=20000, random_state=42)
+train_data, temp_data = train_test_split(samples, train_size=60000, random_state=42)
 
-test_data, val_data = train_test_split(temp_data, test_size=5000, random_state=42)
+test_data, val_data = train_test_split(temp_data, test_size=10000, random_state=42)
 
 
 train_dataset = Dataset.from_list(train_data)
