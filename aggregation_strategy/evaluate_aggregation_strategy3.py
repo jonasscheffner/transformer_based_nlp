@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from nltk.tokenize import sent_tokenize
 from nltk import download
+from itertools import permutations, product
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
@@ -43,7 +44,7 @@ def predict_whole_text(text, model, tokenizer):
 
 
 def predict_paragraph_level(text, model, tokenizer, max_sentences=7):
-    paragraphs = split_into_paragraphs(text, max_sentences=max_sentences)
+    paragraphs = split_into_paragraphs(text, max_sentences)
     if not paragraphs:
         return 0.0
     probs = [predict_prob(p, model, tokenizer)[0][1].item() for p in paragraphs]
@@ -71,45 +72,33 @@ def predict_sentence_level(text, model, tokenizer, context_window=2):
 
 def aggregation_strategy_3(
     text,
-    whole_model,
-    whole_tokenizer,
-    paragraph_model,
-    paragraph_tokenizer,
-    sentence_model,
-    sentence_tokenizer,
+    models,
+    tokenizers,
+    order,
+    upper_thresh,
+    lower_thresh,
+    decision_thresh,
     paragraph_max_sentences=7,
     sentence_context=2,
-    upper_thresh=0.95,
-    lower_thresh=0.05,
-    decision_thresh=0.5,
 ):
-    prob_whole = predict_whole_text(text, whole_model, whole_tokenizer)
-    if prob_whole >= upper_thresh:
-        return 1, "whole", prob_whole
-    elif prob_whole <= lower_thresh:
-        return 0, "whole", prob_whole
-
-    prob_paragraph = predict_paragraph_level(
-        text,
-        paragraph_model,
-        paragraph_tokenizer,
-        max_sentences=paragraph_max_sentences,
+    probs = {}
+    probs["whole"] = predict_whole_text(text, models["whole"], tokenizers["whole"])
+    probs["paragraph"] = predict_paragraph_level(
+        text, models["paragraph"], tokenizers["paragraph"], paragraph_max_sentences
     )
-    if prob_paragraph >= upper_thresh:
-        return 1, "paragraph", prob_paragraph
-    elif prob_paragraph <= lower_thresh:
-        return 0, "paragraph", prob_paragraph
-
-    prob_sentence = predict_sentence_level(
-        text, sentence_model, sentence_tokenizer, context_window=sentence_context
+    probs["sentence"] = predict_sentence_level(
+        text, models["sentence"], tokenizers["sentence"], sentence_context
     )
-    if prob_sentence >= upper_thresh:
-        return 1, "sentence", prob_sentence
-    elif prob_sentence <= lower_thresh:
-        return 0, "sentence", prob_sentence
 
-    fallback = int(prob_sentence >= decision_thresh)
-    return fallback, "sentence-fallback", prob_sentence
+    for level in order:
+        prob = probs[level]
+        if prob >= upper_thresh:
+            return 1, level, prob
+        elif prob <= lower_thresh:
+            return 0, level, prob
+
+    fallback = int(probs["sentence"] >= decision_thresh)
+    return fallback, "sentence-fallback", probs["sentence"]
 
 
 def compute_metrics(true, pred):
@@ -141,65 +130,102 @@ sentence_tokenizer_path = (
     "../models/satz_klassifizierer/sentence_classification_tokenizer"
 )
 
-whole_model = AutoModelForSequenceClassification.from_pretrained(whole_model_path).to(
-    device
-)
-whole_tokenizer = AutoTokenizer.from_pretrained(whole_tokenizer_path)
-paragraph_model = AutoModelForSequenceClassification.from_pretrained(
-    paragraph_model_path
-).to(device)
-paragraph_tokenizer = AutoTokenizer.from_pretrained(paragraph_tokenizer_path)
-sentence_model = AutoModelForSequenceClassification.from_pretrained(
-    sentence_model_path
-).to(device)
-sentence_tokenizer = AutoTokenizer.from_pretrained(sentence_tokenizer_path)
+# load models
+models = {
+    "whole": AutoModelForSequenceClassification.from_pretrained(whole_model_path).to(
+        device
+    ),
+    "paragraph": AutoModelForSequenceClassification.from_pretrained(
+        paragraph_model_path
+    ).to(device),
+    "sentence": AutoModelForSequenceClassification.from_pretrained(
+        sentence_model_path
+    ).to(device),
+}
+tokenizers = {
+    "whole": AutoTokenizer.from_pretrained(whole_tokenizer_path),
+    "paragraph": AutoTokenizer.from_pretrained(paragraph_tokenizer_path),
+    "sentence": AutoTokenizer.from_pretrained(sentence_tokenizer_path),
+}
 
-
+# load data
 samples = []
 with open(test_path, "r", encoding="utf-8") as f:
     for line in f:
         samples.append(json.loads(line))
 
+# grid search settings
+orders = list(permutations(["whole", "paragraph", "sentence"]))
+upper_threshs = [0.9, 0.95]
+lower_threshs = [0.1, 0.05]
+decision_threshs = [0.5, 0.6]
+
 output_folder = "aggregation_strategy3_outputs"
 os.makedirs(output_folder, exist_ok=True)
 
-true_labels = []
-agg_preds = []
-used_levels = []
+best_f1 = -1.0
+best_config = None
+best_preds = []
+best_used_levels = []
 
-for i, sample in enumerate(samples):
-    if i % 50 == 0:
-        print(f"{i}/{len(samples)} processed...")
+# grid search
+for order, upper, lower, fallback in product(
+    orders, upper_threshs, lower_threshs, decision_threshs
+):
+    preds = []
+    used_levels = []
+    true_labels = []
 
-    label = sample["label"]
-    true_labels.append(label)
+    for sample in samples:
+        label = sample["label"]
+        true_labels.append(label)
 
-    agg_pred, level, prob = aggregation_strategy_3(
-        sample["text"],
-        whole_model,
-        whole_tokenizer,
-        paragraph_model,
-        paragraph_tokenizer,
-        sentence_model,
-        sentence_tokenizer,
-    )
-    agg_preds.append(agg_pred)
-    used_levels.append(level)
+        pred, level, _ = aggregation_strategy_3(
+            sample["text"],
+            models,
+            tokenizers,
+            order=order,
+            upper_thresh=upper,
+            lower_thresh=lower,
+            decision_thresh=fallback,
+        )
+        preds.append(pred)
+        used_levels.append(level)
 
-metrics = {
-    "aggregation_strategy_3": compute_metrics(true_labels, agg_preds),
+    metrics = compute_metrics(true_labels, preds)
+    f1 = metrics["f1"]
+
+    if f1 > best_f1:
+        best_f1 = f1
+        best_config = {
+            "model_order": list(order),
+            "upper_thresh": upper,
+            "lower_thresh": lower,
+            "decision_thresh": fallback,
+        }
+        best_preds = preds
+        best_used_levels = used_levels
+
+# final evaluation
+final_metrics = compute_metrics([s["label"] for s in samples], best_preds)
+final_metrics["used_levels"] = {
+    level: best_used_levels.count(level) for level in set(best_used_levels)
 }
-metrics["aggregation_strategy_3"]["used_levels"] = {
-    level: used_levels.count(level) for level in set(used_levels)
-}
 
+# save best config
+with open(os.path.join(output_folder, "best_config.json"), "w", encoding="utf-8") as f:
+    json.dump(best_config, f, indent=2, ensure_ascii=False)
+
+# save metrics
 with open(
     os.path.join(output_folder, "aggregationstrategy3_metrics.json"),
     "w",
     encoding="utf-8",
 ) as f:
-    json.dump(metrics, f, indent=2, ensure_ascii=False)
+    json.dump(final_metrics, f, indent=2, ensure_ascii=False)
 
 print("Finished Aggregation Strategy 3")
-print("Metrics:")
-print(json.dumps(metrics, indent=2, ensure_ascii=False))
+print("Best configuration:")
+print(json.dumps(best_config, indent=2, ensure_ascii=False))
+print("Final evaluation metrics:")
+print(json.dumps(final_metrics, indent=2, ensure_ascii=False))
