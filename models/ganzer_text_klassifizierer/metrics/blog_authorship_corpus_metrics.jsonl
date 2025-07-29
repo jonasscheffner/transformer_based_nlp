@@ -1,0 +1,24 @@
+{
+  "eval_loss": 0.2558995485305786,
+  "eval_accuracy": 0.9440036126701503,
+  "eval_precision_human": 0.9707421503330161,
+  "eval_recall_human": 0.9291894353369763,
+  "eval_f1_human": 0.9495114006514658,
+  "eval_precision_ai": 0.9123079092062597,
+  "eval_recall_ai": 0.9633765073693613,
+  "eval_f1_ai": 0.9371469949312092,
+  "eval_confusion_matrix": [
+    [
+      8162,
+      622
+    ],
+    [
+      246,
+      6471
+    ]
+  ],
+  "eval_runtime": 3010.0448,
+  "eval_samples_per_second": 5.15,
+  "eval_steps_per_second": 0.644,
+  "epoch": 2.0
+}
