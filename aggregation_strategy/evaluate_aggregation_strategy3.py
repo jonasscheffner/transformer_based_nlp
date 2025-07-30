@@ -71,25 +71,16 @@ def predict_sentence_level(text, model, tokenizer, context_window=2):
 
 
 def aggregation_strategy_3(
-    text, models, tokenizers, order, upper_thresh, lower_thresh, decision_thresh
+    precomputed_probs, order, upper_thresh, lower_thresh, decision_thresh
 ):
-    probs = {
-        "whole": predict_whole_text(text, models["whole"], tokenizers["whole"]),
-        "paragraph": predict_paragraph_level(
-            text, models["paragraph"], tokenizers["paragraph"]
-        ),
-        "sentence": predict_sentence_level(
-            text, models["sentence"], tokenizers["sentence"]
-        ),
-    }
     for level in order:
-        prob = probs[level]
+        prob = precomputed_probs[level]
         if prob >= upper_thresh:
             return 1, level, prob
         elif prob <= lower_thresh:
             return 0, level, prob
-    fallback = int(probs["sentence"] >= decision_thresh)
-    return fallback, "sentence-fallback", probs["sentence"]
+    fallback = int(precomputed_probs["sentence"] >= decision_thresh)
+    return fallback, "sentence-fallback", precomputed_probs["sentence"]
 
 
 def compute_metrics(true, pred):
@@ -145,6 +136,25 @@ with open(test_path, "r", encoding="utf-8") as f:
     for line in f:
         samples.append(json.loads(line))
 
+# precompute probabilities for each sample and model
+print("Precomputing model probabilities...")
+precomputed = []
+for i, sample in enumerate(samples, start=1):
+    probs = {
+        "whole": predict_whole_text(
+            sample["text"], models["whole"], tokenizers["whole"]
+        ),
+        "paragraph": predict_paragraph_level(
+            sample["text"], models["paragraph"], tokenizers["paragraph"]
+        ),
+        "sentence": predict_sentence_level(
+            sample["text"], models["sentence"], tokenizers["sentence"]
+        ),
+    }
+    precomputed.append({"label": sample["label"], "probs": probs})
+    if i % 5000 == 0:
+        print(f"Precomputed {i}/{len(samples)} samples...")
+
 # grid search settings
 orders = list(permutations(["whole", "paragraph", "sentence"]))
 upper_threshs = [0.9, 0.95]
@@ -170,14 +180,12 @@ for idx, (order, upper, lower, fallback) in enumerate(combinations, start=1):
     used_levels = []
     true_labels = []
 
-    for i, sample in enumerate(samples, start=1):
-        label = sample["label"]
+    for i, entry in enumerate(precomputed, start=1):
+        label = entry["label"]
         true_labels.append(label)
 
         pred, level, _ = aggregation_strategy_3(
-            sample["text"],
-            models,
-            tokenizers,
+            entry["probs"],
             order=order,
             upper_thresh=upper,
             lower_thresh=lower,
@@ -187,7 +195,7 @@ for idx, (order, upper, lower, fallback) in enumerate(combinations, start=1):
         used_levels.append(level)
 
         if i % 5000 == 0:
-            print(f"\nProcessed {i}/{len(samples)} samples for current config...")
+            print(f"\nProcessed {i}/{len(precomputed)} samples for current config...")
 
     metrics = compute_metrics(true_labels, preds)
     f1 = metrics["f1"]
@@ -204,36 +212,21 @@ for idx, (order, upper, lower, fallback) in enumerate(combinations, start=1):
         best_used_levels = used_levels
 
 # final evaluation
-final_metrics = compute_metrics([s["label"] for s in samples], best_preds)
+final_metrics = compute_metrics([e["label"] for e in precomputed], best_preds)
 final_metrics["used_levels"] = {
     level: best_used_levels.count(level) for level in set(best_used_levels)
 }
 
 print("Evaluating individual models...")
-true_labels = [s["label"] for s in samples]
+true_labels = [e["label"] for e in precomputed]
 
-whole_preds = [
-    int(predict_whole_text(s["text"], models["whole"], tokenizers["whole"]) >= 0.5)
-    for s in samples
-]
+whole_preds = [int(e["probs"]["whole"] >= 0.5) for e in precomputed]
 whole_metrics = compute_metrics(true_labels, whole_preds)
 
-paragraph_preds = [
-    int(
-        predict_paragraph_level(s["text"], models["paragraph"], tokenizers["paragraph"])
-        >= 0.5
-    )
-    for s in samples
-]
+paragraph_preds = [int(e["probs"]["paragraph"] >= 0.5) for e in precomputed]
 paragraph_metrics = compute_metrics(true_labels, paragraph_preds)
 
-sentence_preds = [
-    int(
-        predict_sentence_level(s["text"], models["sentence"], tokenizers["sentence"])
-        >= 0.5
-    )
-    for s in samples
-]
+sentence_preds = [int(e["probs"]["sentence"] >= 0.5) for e in precomputed]
 sentence_metrics = compute_metrics(true_labels, sentence_preds)
 
 all_metrics = {
