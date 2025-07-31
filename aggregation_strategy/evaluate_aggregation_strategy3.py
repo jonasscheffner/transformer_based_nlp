@@ -71,34 +71,16 @@ def predict_sentence_level(text, model, tokenizer, context_window=2):
 
 
 def aggregation_strategy_3(
-    text,
-    models,
-    tokenizers,
-    order,
-    upper_thresh,
-    lower_thresh,
-    decision_thresh,
-    paragraph_max_sentences=7,
-    sentence_context=2,
+    precomputed_probs, order, upper_thresh, lower_thresh, decision_thresh
 ):
-    probs = {}
-    probs["whole"] = predict_whole_text(text, models["whole"], tokenizers["whole"])
-    probs["paragraph"] = predict_paragraph_level(
-        text, models["paragraph"], tokenizers["paragraph"], paragraph_max_sentences
-    )
-    probs["sentence"] = predict_sentence_level(
-        text, models["sentence"], tokenizers["sentence"], sentence_context
-    )
-
     for level in order:
-        prob = probs[level]
+        prob = precomputed_probs[level]
         if prob >= upper_thresh:
             return 1, level, prob
         elif prob <= lower_thresh:
             return 0, level, prob
-
-    fallback = int(probs["sentence"] >= decision_thresh)
-    return fallback, "sentence-fallback", probs["sentence"]
+    fallback = int(precomputed_probs["sentence"] >= decision_thresh)
+    return fallback, "sentence-fallback", precomputed_probs["sentence"]
 
 
 def compute_metrics(true, pred):
@@ -154,11 +136,30 @@ with open(test_path, "r", encoding="utf-8") as f:
     for line in f:
         samples.append(json.loads(line))
 
+# precompute probabilities for each sample and model
+print("Precomputing model probabilities...")
+precomputed = []
+for i, sample in enumerate(samples, start=1):
+    probs = {
+        "whole": predict_whole_text(
+            sample["text"], models["whole"], tokenizers["whole"]
+        ),
+        "paragraph": predict_paragraph_level(
+            sample["text"], models["paragraph"], tokenizers["paragraph"]
+        ),
+        "sentence": predict_sentence_level(
+            sample["text"], models["sentence"], tokenizers["sentence"]
+        ),
+    }
+    precomputed.append({"label": sample["label"], "probs": probs})
+    if i % 5000 == 0:
+        print(f"Precomputed {i}/{len(samples)} samples...")
+
 # grid search settings
 orders = list(permutations(["whole", "paragraph", "sentence"]))
-upper_threshs = [0.9, 0.925, 0.95, 0.975]
-lower_threshs = [0.025, 0.05, 0.075, 0.1]
-decision_threshs = [0.5, 0.6]
+upper_threshs = [0.9, 0.95]
+lower_threshs = [0.05, 0.1]
+decision_threshs = [0.5]
 
 output_folder = "aggregation_strategy3_outputs"
 os.makedirs(output_folder, exist_ok=True)
@@ -168,22 +169,23 @@ best_config = None
 best_preds = []
 best_used_levels = []
 
+combinations = list(product(orders, upper_threshs, lower_threshs, decision_threshs))
+total_combinations = len(combinations)
+print(f"Starting grid search with {total_combinations} combinations...")
+
 # grid search
-for order, upper, lower, fallback in product(
-    orders, upper_threshs, lower_threshs, decision_threshs
-):
+for idx, (order, upper, lower, fallback) in enumerate(combinations, start=1):
+    print(f"\nRunning combination {idx}/{total_combinations}")
     preds = []
     used_levels = []
     true_labels = []
 
-    for sample in samples:
-        label = sample["label"]
+    for i, entry in enumerate(precomputed, start=1):
+        label = entry["label"]
         true_labels.append(label)
 
         pred, level, _ = aggregation_strategy_3(
-            sample["text"],
-            models,
-            tokenizers,
+            entry["probs"],
             order=order,
             upper_thresh=upper,
             lower_thresh=lower,
@@ -191,6 +193,9 @@ for order, upper, lower, fallback in product(
         )
         preds.append(pred)
         used_levels.append(level)
+
+        if i % 5000 == 0:
+            print(f"\nProcessed {i}/{len(precomputed)} samples for current config...")
 
     metrics = compute_metrics(true_labels, preds)
     f1 = metrics["f1"]
@@ -207,25 +212,44 @@ for order, upper, lower, fallback in product(
         best_used_levels = used_levels
 
 # final evaluation
-final_metrics = compute_metrics([s["label"] for s in samples], best_preds)
+final_metrics = compute_metrics([e["label"] for e in precomputed], best_preds)
 final_metrics["used_levels"] = {
     level: best_used_levels.count(level) for level in set(best_used_levels)
 }
 
-# save best config
-with open(os.path.join(output_folder, "best_config.json"), "w", encoding="utf-8") as f:
-    json.dump(best_config, f, indent=2, ensure_ascii=False)
+print("Evaluating individual models...")
+true_labels = [e["label"] for e in precomputed]
 
-# save metrics
+whole_preds = [int(e["probs"]["whole"] >= 0.5) for e in precomputed]
+whole_metrics = compute_metrics(true_labels, whole_preds)
+
+paragraph_preds = [int(e["probs"]["paragraph"] >= 0.5) for e in precomputed]
+paragraph_metrics = compute_metrics(true_labels, paragraph_preds)
+
+sentence_preds = [int(e["probs"]["sentence"] >= 0.5) for e in precomputed]
+sentence_metrics = compute_metrics(true_labels, sentence_preds)
+
+all_metrics = {
+    "aggregation_strategy_3": final_metrics,
+    "individual_models": {
+        "whole": whole_metrics,
+        "paragraph": paragraph_metrics,
+        "sentence": sentence_metrics,
+    },
+}
+
 with open(
     os.path.join(output_folder, "aggregationstrategy3_metrics.json"),
     "w",
     encoding="utf-8",
 ) as f:
-    json.dump(final_metrics, f, indent=2, ensure_ascii=False)
+    json.dump(all_metrics, f, indent=2, ensure_ascii=False)
+
+with open(os.path.join(output_folder, "best_config.json"), "w", encoding="utf-8") as f:
+    json.dump(best_config, f, indent=2, ensure_ascii=False)
 
 print("Finished Aggregation Strategy 3")
 print("Best configuration:")
 print(json.dumps(best_config, indent=2, ensure_ascii=False))
-print("Final evaluation metrics:")
-print(json.dumps(final_metrics, indent=2, ensure_ascii=False))
+print("Final metrics including individual models:")
+print(json.dumps(all_metrics, indent=2, ensure_ascii=False))
