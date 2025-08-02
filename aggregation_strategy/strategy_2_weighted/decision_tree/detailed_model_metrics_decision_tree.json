@@ -1,0 +1,47 @@
+{
+  "aggregated_strategy": {
+    "accuracy": 0.9874238738993533,
+    "precision": 0.9907738520955515,
+    "recall": 0.9854526053707985,
+    "f1": 0.9881060646587849
+  },
+  "individual_models": {
+    "whole_text_model": {
+      "accuracy": 0.9779776382525407,
+      "precision": 0.967521426836462,
+      "recall": 0.9917481771296461,
+      "f1": 0.9794850177398391
+    },
+    "paragraph_model": {
+      "accuracy": 0.9770160454022664,
+      "precision": 0.9854873646209387,
+      "recall": 0.9709407789436244,
+      "f1": 0.9781599928334677
+    },
+    "sentence_model": {
+      "accuracy": 0.9806927239474329,
+      "precision": 0.9804902273775319,
+      "recall": 0.9831406722390184,
+      "f1": 0.9818136610663162
+    }
+  },
+  "confusion_matrix_aggregated": [
+    [
+      24664,
+      258
+    ],
+    [
+      409,
+      27706
+    ]
+  ],
+  "error_analysis": {
+    "wrong_classifications": {
+      "whole_text_model": 1168,
+      "paragraph_model": 1219,
+      "sentence_model": 1024
+    },
+    "rescued_by_strategy": 1654,
+    "total_samples": 53037
+  }
+}
