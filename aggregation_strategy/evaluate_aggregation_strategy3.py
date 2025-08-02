@@ -157,8 +157,8 @@ for i, sample in enumerate(samples, start=1):
 
 # grid search settings
 orders = list(permutations(["whole", "paragraph", "sentence"]))
-upper_threshs = [0.9, 0.95]
-lower_threshs = [0.05, 0.1]
+upper_threshs = [0.9, 0.925, 0.95, 0.975]
+lower_threshs = [0.025, 0.05, 0.075, 0.1]
 decision_threshs = [0.5]
 
 output_folder = "aggregation_strategy3_outputs"
