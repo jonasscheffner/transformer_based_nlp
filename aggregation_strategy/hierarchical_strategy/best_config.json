@@ -1,0 +1,10 @@
+{
+  "model_order": [
+    "whole",
+    "sentence",
+    "paragraph"
+  ],
+  "upper_thresh": 0.975,
+  "lower_thresh": 0.025,
+  "decision_thresh": 0.5
+}
