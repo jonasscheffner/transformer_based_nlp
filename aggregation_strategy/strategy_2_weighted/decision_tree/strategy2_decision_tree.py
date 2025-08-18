@@ -4,8 +4,7 @@ import torch
 import torch.nn.functional as F
 from nltk.tokenize import sent_tokenize
 import json
-from sklearn.tree import DecisionTreeClassifier 
-from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 import joblib
 
@@ -127,7 +126,6 @@ def get_predictions(input, whole_text_classification_model, whole_text_classific
     return pred_whole_text, pred_paragraph, pred_sentence
 
 
-# Lade Modelle & Tokenizer
 whole_text_tokenizer = AutoTokenizer.from_pretrained("../ganzer_text_modell_no_dupes_all_categories/whole_text_classification_tokenizer")
 whole_text_model = AutoModelForSequenceClassification.from_pretrained("../ganzer_text_modell_no_dupes_all_categories/whole_text_classification_model", num_labels=2).to(device)
 
@@ -138,7 +136,6 @@ sentence_tokenizer = AutoTokenizer.from_pretrained("../satzweise_modell_no_dupes
 sentence_model = AutoModelForSequenceClassification.from_pretrained("../satzweise_modell_no_dupes_all_categories/sentence_classification_model", num_labels=2).to(device)
 
 
-# Lade Daten
 samples = []
 with open("../../data/test_dataset_no_dupes_for_aggregationstrategy.jsonl", 'r', encoding='utf-8') as f:
     for line in f:
@@ -188,7 +185,7 @@ accuracy = accuracy_score(y, aggregated_preds)
 precision, recall, f1, _ = precision_recall_fscore_support(y, aggregated_preds, average='binary')
 conf_matrix = confusion_matrix(y, aggregated_preds)
 
-print("\n--- Aggregationsstrategie DecisionTree---")
+print("\n--- Aggregationsstrategie ---")
 print(f"Accuracy:  {accuracy:.4f}")
 print(f"Precision: {precision:.4f}")
 print(f"Recall:    {recall:.4f}")
@@ -201,6 +198,7 @@ wrong_whole = 0
 wrong_paragraph = 0
 wrong_sentence = 0
 rescued_by_strategy = 0
+strategy_wrong_others_correct = 0
 
 
 whole_preds = []
@@ -231,6 +229,10 @@ for i in range(len(samples)):
     ):
         rescued_by_strategy += 1
 
+    if pred != true and (
+        whole_label == true or par_label == true or sen_label == true
+    ):
+        strategy_wrong_others_correct += 1
 
 print("\n--- Fehleranalyse ---")
 print(f"Falschklassifikationen:")
@@ -238,6 +240,7 @@ print(f"Whole-Text-Modell:  {wrong_whole} von {len(samples)}")
 print(f"Paragraph-Modell:   {wrong_paragraph} von {len(samples)}")
 print(f"Sentence-Modell:    {wrong_sentence} von {len(samples)}")
 print(f"Gerettet durch Strategie (LogReg korrekt, Einzelmodell(e) falsch): {rescued_by_strategy}")
+print(f"Strategie falsch, aber mind. ein Einzelmodell korrekt: {strategy_wrong_others_correct}")
 
 
 metrics_whole = compute_metrics(y, whole_preds)
@@ -261,6 +264,7 @@ all_metrics = {"aggregated_strategy": {
         "sentence_model": wrong_sentence
     },
     "rescued_by_strategy": rescued_by_strategy,
+    "strategy_wrong_others_correct": strategy_wrong_others_correct,
     "total_samples": len(samples)
 }}
 

@@ -5,6 +5,9 @@ import torch
 import json
 from datasets import Dataset, DatasetDict
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+from collections import defaultdict
+from transformers import DataCollatorWithPadding
 
 print("Cuda available: ", torch.cuda.is_available())
 
@@ -47,7 +50,7 @@ def preprocess(example):
 train_tokenized = dataset["train"].map(preprocess, batched=False)
 validation_tokenized = dataset["validation"].map(preprocess, batched=False)
 
-from transformers import DataCollatorWithPadding
+
 
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
@@ -69,11 +72,11 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="accuracy",
     greater_is_better=True,
-    fp16=True,                              # falls GPU benutzt wird am besten anmachen
+    fp16=True,
     report_to="none"   
 )
 
-from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+
 
 accuracy = evaluate.load("accuracy")
 def compute_metrics(eval_pred):
@@ -122,14 +125,13 @@ with open("metrics_train.json", "w") as f:
 test_tokenized = Dataset.from_list(test_data).map(preprocess)
 results = trainer.evaluate(test_tokenized)
 
-print("Test-Ergebnisse für den gesamten Testdatensatz:")
+print("Test Results for whole test set:")
 print(results)
 
 with open("metrics_whole_test_dataset.json", "w") as f:
     json.dump(results, f, indent=2)
 
 
-from collections import defaultdict
 
 sources_dict = defaultdict(list)
 for sample in dataset["test"]:
@@ -147,51 +149,3 @@ for category in sources_dict.keys():
     filename = f"{category}_metrics.jsonl"
     with open(filename, "w") as f:
         json.dump(results, f, indent=2)
-
-
-#import json
-#
-#results = trainer.evaluate()
-#
-#with open("metrics_results2.json", "w") as f:
-#    json.dump(results, f, indent=4)
-#
-#
-#
-#test_tokenized = dataset["test"].map(preprocess, batched=False)
-#predictions = trainer.predict(test_tokenized)
-#
-#predicted_labels = np.argmax(predictions.predictions, axis=1)
-#true_labels = predictions.label_ids
-#
-#correct = 0
-#total_wrong = 0
-#
-#correctly_classified_file = open("correctly_classified.txt", "w", encoding="utf-8")
-#incorrectly_classified_file = open("incorrectly_classified.txt", "w", encoding="utf-8")
-#
-#for i, (pred, true) in enumerate(zip(predicted_labels, true_labels)):
-#
-#    if (i+1)%500 == 0:
-#        print(f"Correct at {i} samples: {correct} accuracy: {correct/i}")
-#
-#    text = dataset["test"][i]["text"]
-#    if pred == true:
-#        correct += 1
-#        correctly_classified_file.write(f"Actual Label: {true}, Predicted Label: {pred}\n")
-#        correctly_classified_file.write(f"Text: {text}\n")
-#        correctly_classified_file.write("-" * 50 + "\n")
-#    else:
-#        total_wrong += 1
-#        incorrectly_classified_file.write(f"Actual Label: {true}, Predicted Label: {pred}\n")
-#        incorrectly_classified_file.write(f"Text: {text}\n")
-#        incorrectly_classified_file.write("-" * 50 + "\n")
-#
-#incorrectly_classified_file.write(f"Total wrong: {total_wrong} from total samples: {len(dataset['test'])}\n")
-#incorrectly_classified_file.write(f"Accuracy correct: {correct / len(dataset['test'])}\n")
-#
-#print(f"Correct predicted:{correct}")
-#print(f"Total accuracy on test data: {correct/len(dataset['test'])}")
-#
-#correctly_classified_file.close()
-#incorrectly_classified_file.close()

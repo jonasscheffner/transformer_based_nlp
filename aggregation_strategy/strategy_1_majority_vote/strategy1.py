@@ -1,12 +1,7 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
-import numpy as np
-import evaluate
 import torch
 import torch.nn.functional as F
 from nltk.tokenize import sent_tokenize
-import json
-from datasets import Dataset, DatasetDict
-from sklearn.model_selection import train_test_split
 
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 import json
@@ -222,11 +217,3 @@ with open("aggregationstrategy_metrics.json", "w", encoding="utf-8") as f:
 print(f"aggregation_correct_and_others_not: {len(aggregation_correct_and_others_not)} out of {len(samples)}")
 print("metrics:")
 print(metrics)
-
-
-
-# TODO ??
-# - aus aggregationstrategy_metrics.json auslesen
-#       - wie oft hat aggregation gerettet
-#       - welches modell lag am häufigsten daneben
-#       - ggf. Texte genauer anschauen (z.B. avg Länge in Sätzen oder Wörtern)

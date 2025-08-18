@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import nltk
 from nltk.tokenize import sent_tokenize
-import os
+from collections import defaultdict
 
 nltk.download("punkt_tab")
 print("Cuda available:", torch.cuda.is_available())
@@ -27,7 +27,6 @@ def load_sentence_context_data(path, context_size=2):
                 samples.append({"text": context_text, "label": example["label"], "category": example["category"]})
     return samples
 
-print("Loading samples")
 samples = load_sentence_context_data("../../data/ganzer_text/dataset_no_dupes.jsonl", context_size=2)
 
 train_data, temp_data = train_test_split(samples, train_size=40000, random_state=42)
@@ -77,7 +76,7 @@ training_args = TrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="accuracy",
     greater_is_better=True,
-    fp16=True,                              # falls GPU benutzt wird am besten anmachen
+    fp16=True,
     report_to="none"
 )
 
@@ -122,7 +121,7 @@ print(results)
 with open("metrics_train.json", "w") as f:
     json.dump(results, f, indent=2)
 
-print("Test-Ergebnisse:")
+print("Test results:")
 print(results)
 
 with open("metrics_train.json", "w") as f:
@@ -133,14 +132,14 @@ with open("metrics_train.json", "w") as f:
 test_tokenized = Dataset.from_list(test_data).map(preprocess)
 results = trainer.evaluate(test_tokenized)
 
-print("Test-Ergebnisse für den gesamten Testdatensatz:")
+print("Test results for whole test set:")
 print(results)
 
 with open("metrics_whole_test_dataset.json", "w") as f:
     json.dump(results, f, indent=2)
 
 
-from collections import defaultdict
+
 
 sources_dict = defaultdict(list)
 for sample in dataset["test"]:
