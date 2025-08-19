@@ -16,13 +16,11 @@ import torch
 import nltk
 from nltk.tokenize import sent_tokenize
 
-# Setup
 print("CUDA available:", torch.cuda.is_available())
 nltk.download("punkt")
 nltk.download("punkt_tab")
 
 
-# Absatzbildung
 def split_into_paragraphs(text, max_sentences=7):
     sentences = sent_tokenize(text)
     paragraphs = []
@@ -33,7 +31,6 @@ def split_into_paragraphs(text, max_sentences=7):
     return paragraphs
 
 
-# Datensatz laden
 def load_paragraph_data(path):
     paragraph_samples = []
     with open(path, "r", encoding="utf-8") as f:
@@ -50,11 +47,9 @@ def load_paragraph_data(path):
     return paragraph_samples
 
 
-# Daten einlesen
 samples = load_paragraph_data("../../data/dataset_no_dupes.jsonl")
 samples = samples[:30000]
 
-# Split
 train_data, temp_data = train_test_split(samples, train_size=24000, random_state=42)
 val_data, test_data = train_test_split(temp_data, test_size=3000, random_state=42)
 
@@ -70,13 +65,11 @@ print("Train size:", len(dataset["train"]))
 print("Validation size:", len(dataset["validation"]))
 print("Test size:", len(dataset["test"]))
 
-# Modell und Tokenizer
 model_name = "Hello-SimpleAI/chatgpt-detector-roberta"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
 
 
-# Preprocessing
 def preprocess(example):
     tokens = tokenizer(
         example["text"],
@@ -93,7 +86,6 @@ train_tokenized = dataset["train"].map(preprocess)
 val_tokenized = dataset["validation"].map(preprocess)
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-# Trainingsargumente
 training_args = TrainingArguments(
     output_dir="./paragraph_model_7sent_output",
     eval_strategy="steps",
@@ -115,7 +107,7 @@ training_args = TrainingArguments(
 )
 
 
-# Metriken
+# Metrics
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=1)
@@ -135,7 +127,6 @@ def compute_metrics(eval_pred):
     }
 
 
-# Trainer
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -146,14 +137,11 @@ trainer = Trainer(
     data_collator=data_collator,
 )
 
-# Training starten
 trainer.train()
 
-# Modell speichern
 model.save_pretrained("./paragraph_model_7sent")
 tokenizer.save_pretrained("./paragraph_tokenizer_7sent")
 
-# Test-Evaluation
 test_tokenized = dataset["test"].map(preprocess)
 results = trainer.evaluate(test_tokenized)
 
@@ -163,7 +151,7 @@ print(results)
 with open("metrics_7sent.json", "w") as f:
     json.dump(results, f, indent=2)
 
-# Evaluation pro Kategorie
+# Evaluation per category
 sources_dict = defaultdict(list)
 for sample in dataset["test"]:
     sources_dict[sample["category"]].append(sample)
