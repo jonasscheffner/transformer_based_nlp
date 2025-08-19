@@ -151,7 +151,9 @@ for i, sample in enumerate(samples, start=1):
             sample["text"], models["sentence"], tokenizers["sentence"]
         ),
     }
-    precomputed.append({"label": sample["label"], "probs": probs})
+    precomputed.append(
+        {"label": sample["label"], "text": sample["text"], "probs": probs}
+    )
     if i % 5000 == 0:
         print(f"Precomputed {i}/{len(samples)} samples...")
 
@@ -229,6 +231,34 @@ paragraph_metrics = compute_metrics(true_labels, paragraph_preds)
 sentence_preds = [int(e["probs"]["sentence"] >= 0.5) for e in precomputed]
 sentence_metrics = compute_metrics(true_labels, sentence_preds)
 
+# aggregation correct while others wrong
+correct_when_others_wrong = []
+for i, entry in enumerate(precomputed):
+    label = entry["label"]
+    agg_pred = best_preds[i]
+    whole_pred = whole_preds[i]
+    para_pred = paragraph_preds[i]
+    sent_pred = sentence_preds[i]
+
+    if agg_pred == label and (
+        whole_pred != label or para_pred != label or sent_pred != label
+    ):
+        correct_when_others_wrong.append(
+            {
+                "text": entry["text"],
+                "label": label,
+                "aggregation_pred": agg_pred,
+                "whole_pred": whole_pred,
+                "paragraph_pred": para_pred,
+                "sentence_pred": sent_pred,
+            }
+        )
+
+print(
+    f"\nAggregation correct while at least one model was wrong: {len(correct_when_others_wrong)} cases"
+)
+
+# save metrics and config
 all_metrics = {
     "aggregation_strategy_3": final_metrics,
     "individual_models": {
@@ -247,6 +277,13 @@ with open(
 
 with open(os.path.join(output_folder, "best_config.json"), "w", encoding="utf-8") as f:
     json.dump(best_config, f, indent=2, ensure_ascii=False)
+
+with open(
+    os.path.join(output_folder, "aggregation_correct_and_others_not.json"),
+    "w",
+    encoding="utf-8",
+) as f:
+    json.dump(correct_when_others_wrong, f, indent=2, ensure_ascii=False)
 
 print("Finished Aggregation Strategy 3")
 print("Best configuration:")
