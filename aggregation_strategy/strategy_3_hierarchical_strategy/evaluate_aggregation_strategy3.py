@@ -98,18 +98,20 @@ def compute_metrics(true, pred):
     }
 
 
-test_path = "../data/test_dataset_no_dupes_for_aggregationstrategy.jsonl"
+test_path = "../../data/test_dataset_no_dupes_for_aggregationstrategy.jsonl"
 whole_model_path = (
-    "../models/ganzer_text_klassifizierer/whole_text_classification_model"
+    "../../models/ganzer_text_klassifizierer/whole_text_classification_model"
 )
 whole_tokenizer_path = (
-    "../models/ganzer_text_klassifizierer/whole_text_classification_tokenizer"
+    "../../models/ganzer_text_klassifizierer/whole_text_classification_tokenizer"
 )
-paragraph_model_path = "../models/absatz_klassifizierer/paragraph_model_7sent"
-paragraph_tokenizer_path = "../models/absatz_klassifizierer/paragraph_tokenizer_7sent"
-sentence_model_path = "../models/satz_klassifizierer/sentence_classification_model"
+paragraph_model_path = "../../models/absatz_klassifizierer/paragraph_model_7sent"
+paragraph_tokenizer_path = (
+    "../../models/absatz_klassifizierer/paragraph_tokenizer_7sent"
+)
+sentence_model_path = "../../models/satz_klassifizierer/sentence_classification_model"
 sentence_tokenizer_path = (
-    "../models/satz_klassifizierer/sentence_classification_tokenizer"
+    "../../models/satz_klassifizierer/sentence_classification_tokenizer"
 )
 
 # load models
